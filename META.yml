@@ -1,9 +1,11 @@
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         CGI-Application-Plugin-TemplateRunner
-version:      0.02
+version:      0.03
 version_from: TemplateRunner.pm
 installdirs:  site
 requires:
+    CGI::Application:              3
+    HTML::Template:                2
 
 distribution_type: module
 generated_by: ExtUtils::MakeMaker version 6.12

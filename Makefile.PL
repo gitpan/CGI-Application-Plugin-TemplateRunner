@@ -5,8 +5,11 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'CGI::Application::Plugin::TemplateRunner',
     VERSION_FROM      => 'TemplateRunner.pm', # finds $VERSION
-    PREREQ_PM         => {}, # e.g., Module::Name => 1.1
+    PREREQ_PM         => {
+		HTML::Template => 2,
+		CGI::Application => 3,
+	}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'TemplateRunner.pm', # retrieve abstract from module
-       AUTHOR         => 'Thilo Planz <planz@epost.de>') : ()),
+       AUTHOR         => 'Thilo Planz <thiloplanz@web.de>') : ()),
 );

@@ -4,7 +4,7 @@
 #########################
 
 
-use Test::More tests => 9;
+use Test::More tests => 10;
 BEGIN { use_ok('CGI::Application::Plugin::TemplateRunner') };
 
 #########################
@@ -63,15 +63,17 @@ BEGIN { use_ok('CGI::Application::Plugin::TemplateRunner') };
 }
 
 {
-	my $testname = "cookies and CGI params";
+	my $testname = "cookies, CGI params, app params";
 	$ENV{HTTP_COOKIE} = "foo=baz";
 	my $app = new MyTestApp();
 	$app->tmpl_path('t/tmplroot');
 	$app->query->param(foo => 'bar');
+	$app->param(blah => {one => 'eins', two=>'zwei'});
 	my $t = $app->prepare_tmpl('CAPH.html');
 	$t = $t->output;
 	is (index($t, 'bar'),58, $testname);
 	is (index($t, 'baz'),63, $testname);
+	is (index($t, 'zwei'),68, $testname);
 }
 
 {

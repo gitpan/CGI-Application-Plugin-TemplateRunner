@@ -12,7 +12,7 @@ our @EXPORT_OK = qw[
 	fill_tmpl
 	];
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 sub show_tmpl{
 	my ($self) = @_;
@@ -64,6 +64,7 @@ sub prepare_tmpl{
 	foreach ($q->cookie){
 		$tmpl->param("/cookie/$_" => scalar $q->cookie($_));
 	}
+	fill_tmpl($self, $tmpl, $self->{__PARAMS}, '/app');
 	
 	fill_tmpl($self, $tmpl, \%extras) if keys %extras;
 	return $tmpl;	
@@ -104,7 +105,6 @@ sub setup{
 
 1;
 __END__
-# Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
 
@@ -187,7 +187,7 @@ the additional functionality needed by this plugin
 (descending into hashes, calling coderefs).
 
 	$self->fill_tmpl($tmpl, {
-	/somehash => { one => 1, two=>2 }};
+	'/somehash' => { one => 1, two=>2 }};
 
 =head2 Where does the template get its data?
 
@@ -206,6 +206,16 @@ you can get it as
 and your cookie "ID" will become
 
 	<tmpl_var /cookie/id>
+
+=head3 Application parameters
+
+Parameters set for the CGI::Application instance
+(using $app->param() ) are also automatically available
+to the template
+
+	$app->param(foo => bar);
+	
+	<tmpl_var /app/foo>
 
 
 =head3 The data file
@@ -241,7 +251,7 @@ Here is an example:
 		articles => sub{
 			my $app = shift;
 			# subroutines get the CGI::App
-			# instance as only parameter
+			# instance as their only parameter
 			my $q = $app->query;
 			my $page = $q->param('page')||1;
 			my $total = MyDB::get_article_count;
@@ -300,7 +310,7 @@ L<http://twiki.med.yale.edu/twiki2/bin/view/CGIapp/WebHome>.
 
 =head1 AUTHOR
 
-Thilo Planz, E<lt>planz@epost.deE<gt>
+Thilo Planz, E<lt>thiloplanz@web.deE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
