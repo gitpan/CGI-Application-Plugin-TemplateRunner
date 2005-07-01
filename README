@@ -1,4 +1,4 @@
-CGI/Application/Plugin/TemplateRunner version 0.03
+CGI/Application/Plugin/TemplateRunner version 0.04
 ================================================
 
 This module is a plugin for L<CGI::Application>

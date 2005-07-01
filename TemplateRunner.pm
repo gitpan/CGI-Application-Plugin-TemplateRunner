@@ -12,7 +12,7 @@ our @EXPORT_OK = qw[
 	fill_tmpl
 	];
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 sub show_tmpl{
 	my ($self) = @_;
@@ -36,23 +36,51 @@ sub prepare_tmpl{
 	$base = $base->[0] if ref $base; 
 	die "you need to defined a tmpl_path for your application\n" unless $base;
 	
+	# find the template (match _default)
+	my $filename = $name;
+	my @defaults;
+	unless (-e "$base/$filename"){
+		my (@path) = split '/', $filename;
+		# remove trailing /
+		shift @path;
+		my $tmp = '';
+		foreach (@path){
+			if (-e "$base/$tmp/$_"){
+				$tmp .= "/$_";
+				next;
+			}
+			my ($before, $after) = split '\.', $_, 2;
+			$after = defined $after ? ".$after" : '';
+			if (-e "$base/$tmp/_default$after"){
+				$tmp .= "/_default$after";
+				push @defaults, $before;
+				next;
+			}
+			die "template file $name not found (match so far: $tmp )\n";
+		}
+		
+		$filename = substr $tmp,1 ; #strip leading slash
+	}
+	
 	# load the template
 	my $cache = 'cache';
 	$cache = 'shared_cache' if $IPC::SharedCache::VERSION;
-	my $tmpl = $self->load_tmpl($name, 
+	my $tmpl = $self->load_tmpl($filename, 
 		die_on_bad_params => 0,
 		loop_context_vars => 1,
 		global_vars => 1,
 		$cache => 1,
 		);
 	
+	# TODO: match data file _default independently
+	
 	# load a data file if available
-	if (-e "$base/$name.pl"){
-		my $result = do "$base/$name.pl";
+	if (-e "$base/$filename.pl"){
+		my $result = do "$base/$filename.pl";
 		if ($@){
-			warn "/$base/$name.pl could not be compiled: $@ $!\n";
+			warn "/$base/$filename.pl could not be compiled: $@ $!\n";
 		}else{
-			fill_tmpl($self, $tmpl, $result);
+			fill_tmpl($self, $tmpl, $result, undef, \@defaults);
 		}
 	}
 	
@@ -65,27 +93,34 @@ sub prepare_tmpl{
 		$tmpl->param("/cookie/$_" => scalar $q->cookie($_));
 	}
 	fill_tmpl($self, $tmpl, $self->{__PARAMS}, '/app');
+
+	# fill in defaults	
+	my $i = 1;
+	foreach (@defaults){
+		$extras{"_defaults/$i"} = $_;
+		$i++;
+	}
 	
 	fill_tmpl($self, $tmpl, \%extras) if keys %extras;
 	return $tmpl;	
 }
 
 sub fill_tmpl{
-	my ($self, $tmpl, $data, $prefix) = @_;
+	my ($self, $tmpl, $data, $prefix, $defaults) = @_;
 	$prefix = '' unless defined $prefix;
 	# call code refs 
 	if (ref $data eq 'CODE'){
-		$data = eval{$data->($self)};
+		$data = eval{$data->($self, $defaults ? @$defaults: () )};
 		if ($@){
 			warn "data sub [$prefix] could not be executed: $@\n";
 		}
-		fill_tmpl($self, $tmpl, $data, $prefix);
+		fill_tmpl($self, $tmpl, $data, $prefix, $defaults);
 		return;
 	}
 	# dive into hash refs
 	if (ref $data eq 'HASH'){
 		while (my ($key, $value) = each %$data){
-			fill_tmpl($self, $tmpl, $value, "$prefix/$key");
+			fill_tmpl($self, $tmpl, $value, "$prefix/$key", $defaults);
 		}
 		return;
 	}
@@ -108,7 +143,7 @@ __END__
 
 =head1 NAME
 
-CGI::Application::Plugin::TemplateRunner - CGI::App plugin to display HTML::Templates
+CGI::Application::Plugin::TemplateRunner - CGI::App plugin to display HTML::Templates without writing code 
 
 =head1 SYNOPSIS
 
@@ -240,13 +275,13 @@ Here is an example:
 		{ name => 'Sports',  link => 'sports.html'},
 		{ name => 'TV', link => 'tv.html'},
 		],
-		# becomes <tmpl_loop categories>
+		# becomes <tmpl_loop /categories>
 		
 		nested => { 
 			a=> 1, b => 2
 		},
-		# become <tmpl_var nested/a>
-		# and <tmpl_var nested/b>
+		# become <tmpl_var /nested/a>
+		# and <tmpl_var /nested/b>
 		
 		articles => sub{
 			my $app = shift;
@@ -261,8 +296,8 @@ Here is an example:
 				page => $page};
 		};
 		# becomes
-		# <tmpl_var articles/total>
-		# <tmpl_loop articles/page>
+		# <tmpl_var /articles/total>
+		# <tmpl_loop /articles/page>
 	}
 
 =head3 extra parameters to prepare_tmpl
@@ -274,6 +309,86 @@ you can stuff in extra data:
 		$filename, 'more' => 'data')
 		
 	<tmpl_var /more>
+	
+These extras can override all other parameters.
+
+
+=head2 Using _default
+
+Usually, the path of the requested HTML page in the URL corresponds
+directly to a template and optionally a data file:
+For mycgi.cgi/bbs/index.html you would use /bbs/index.html and /bbs/index.html.pl.
+
+This can be made a little more flexible with the _default system:
+If an exact match for the URL is not found, parts of the path can be
+substituted by _default.
+
+=head3 Motivation
+
+I believe that query parameters should only be used for form data,
+not for something that just identifies an page. If nothing else,
+not having query parameters makes for much easier links (query parameters
+tend to get lost unless you explicitly include them every time, which can
+be a lot of work).
+
+For example, if you have a URL like
+
+  mycgi.cgi/bbs/show.html?bbs=1234 
+
+I would very much prefer 
+
+  mycgi.cgi/bbs/1234.html
+
+
+This can be implemented by creating
+
+  /bbs/_default.html 
+  /bbs/_default.html.pl
+
+In the absence of 1234.html, this template and data file will be used.
+
+
+=head3 Accessing the extra parameters
+
+So how do you get to the page number "1234" in the html template and the data file?
+
+The data file subroutines gets passed the "1234" as an extra parameter:
+
+  {
+     article => sub {
+		my ($app, $no) = @_;   # no = 1234
+		return MyDB::get_article($no);
+    },
+  };
+
+In the template you can use
+
+   <tmpl_var _defaults/1 >
+
+=head3 Multiple _default
+
+You can match more than one _default in the URL path if you want:
+
+   mycgi.cgi/articles/culture/music/5555.html
+
+   /articles/_default/_default/_default.html
+
+The matches are passed to template and data file in left-to-right order:
+
+  {
+     article => sub {
+                my ($app, $cat, $subcat, $no) = @_;   
+                return MyDB::get_article($no);
+    },
+  }
+
+  Category: <tmpl_var _defaults/1>
+  Subcategory: <tmpl_var _defaults/2>
+  Article Number: <tmpl_var _defaults/3>
+
+Note that because you place templates and data files in the 
+directory structure, you always know in advance how many of these
+parameters to expect.
 
 
 =head2 Using this class as a CGI::App subclass
@@ -304,7 +419,7 @@ L<CGI::Application>
 =item *
 
 The CGI::App wiki at 
-L<http://twiki.med.yale.edu/twiki2/bin/view/CGIapp/WebHome>.
+L<http://www.cgi-app.org/>.
 
 =back
 
@@ -314,7 +429,7 @@ Thilo Planz, E<lt>thiloplanz@web.deE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2004 by Thilo Planz
+Copyright 2004/05 by Thilo Planz
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 

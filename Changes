@@ -1,6 +1,9 @@
 Revision history for Perl extension CGI::Application::Plugin::TemplateRunner.
 
 
+0.04  Fri Jul 1 2005
+	- _default system
+
 0.03  Sun Nov 21 2004
 	- made CGI::App parameters appear under /app in the template
 
